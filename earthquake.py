@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+from geopy.geocoders import Nominatim
 
 # Load the dataset
 def load_data():
@@ -10,12 +11,29 @@ def load_data():
 
 data = load_data()
 
-# Geocode latitude and longitude to states (simplified, assumes `State` column exists or is preprocessed)
-def preprocess_data(data):
-    if 'State' not in data.columns:
-        st.error("The dataset does not include a 'State' column. Please preprocess to include state information.")
-        st.stop()
+# Geocode latitude and longitude to states
+def add_state_column(data):
+    if 'State' in data.columns:
+        return data
 
+    geolocator = Nominatim(user_agent="earthquake_app")
+
+    def get_state(lat, lon):
+        try:
+            location = geolocator.reverse((lat, lon), exactly_one=True)
+            if location and 'address' in location.raw:
+                return location.raw['address'].get('state', 'Unknown')
+        except Exception as e:
+            return 'Unknown'
+
+    st.write("Adding 'State' column using reverse geocoding. This may take some time...")
+    data['State'] = data.apply(lambda row: get_state(row['Latitude'], row['Longitude']), axis=1)
+    return data
+
+data = add_state_column(data)
+
+# Preprocess data for visualization
+def preprocess_data(data):
     state_counts = data['State'].value_counts().reset_index()
     state_counts.columns = ['State', 'Occurrences']
     return state_counts
@@ -54,4 +72,4 @@ st.plotly_chart(fig_filtered)
 
 # Requirements
 st.write("### Requirements")
-st.code("""pip install streamlit pandas plotly""")
+st.code("""pip install streamlit pandas plotly geopy""")
